@@ -1,208 +1,177 @@
 
 # importing the requests library
+from asyncio.windows_events import NULL
+from os import stat
 import requests
-import collections
+from colorama import init, Fore, Back, Style
 from collections import Counter
-from matplotlib import pyplot as plt
-import numpy as np
 
-  
+init()
 
 
 # api-endpoint
 
 collection = input("Collection: ")
 
+queryFinished = False
 
-
-URL = 'https://api-mainnet.magiceden.io/rpc/getListedNFTsByQuery?q={"$match":{"collectionSymbol":"' + collection + '"},"$sort":{"takerAmount":1,"createdAt":-1},"$skip":0}'
-  
-# location given here
-  
-# defining a params dict for the parameters to be sent to the API
-PARAMS = {}
-  
-# sending get request and saving the response as response object
-r = requests.get(url = URL, params = PARAMS)
-  
-# extracting data in json format
-data = r.json()
-
-
-priceSum = 0
+skip = 0
 numListings = 0
-lowestPrice = 0
+floorPrice = 100000000000000
+nftDictionary = {}
+traitsShape = []
+listingTemplate = {}
+sortedNFTList = []
 
-nftDictionary = collections.defaultdict(list)
+while(not queryFinished):
 
-for listing in data["results"]:
-    attributes = listing["attributes"]
-    numListings += 1
-    price = listing["price"]
-        
-    priceSum += price
-
-
-    print(attributes)
-
-    for attribute in attributes:
-
-        try:
-            trait = "trait_type"
-            attribute[trait]
-        except Exception as e:
-            trait = "trait type"
-
-        nftDictionary[attribute[trait]].append(attribute["value"])
-
-
+    URL = 'https://api-mainnet.magiceden.io/rpc/getListedNFTsByQuery?q={"$match":{"collectionSymbol":"' + collection + '"},"$sort":{"takerAmount":1,"createdAt":-1},"$skip":' + str(skip) + '}'
     
-print("------Aggregate Data------")
-print("# of Listings: " + str(numListings))
-
-for attribute in nftDictionary:
-    print("Attribute: " + attribute)
-    print("------------------------")
-    nftDictionary[attribute] = {"Items": Counter(nftDictionary[attribute]), "Statistics": []}
-
-    #print(nftDictionary[attribute])
-
-    averageOccurance = 0
-    characteristicCount = 0
-
-    occuranceList = []
-
-    for characteristic in nftDictionary[attribute]["Items"]:
-        occuranceOfCharacteristic = nftDictionary[attribute]["Items"][characteristic]
-        occuranceList.append(occuranceOfCharacteristic)
-        averageOccurance += occuranceOfCharacteristic
-        characteristicCount += 1
-
-    averageOccurance = averageOccurance / characteristicCount
-
-    median = max(occuranceList)
-    highestSpread = 0
-    print("Median: " + str(median))
-
-    #print(averageOccurance)
-
-
-    for characteristic in nftDictionary[attribute]["Items"]:
-        occuranceOfCharacteristic = nftDictionary[attribute]["Items"][characteristic]
-
-        spread = abs(median - occuranceOfCharacteristic)
-
-        if(spread > highestSpread):
-            highestSpread = spread
-
-
-    if(spread != 0):
-        highestSpread = median / spread
-    else:
-        highestSpread = 1.06
-
-    for characteristic in nftDictionary[attribute]["Items"]:
-        occuranceOfCharacteristic = nftDictionary[attribute]["Items"][characteristic]
-        nftDictionary[attribute]["Items"][characteristic] = {}
-
-
-        nftDictionary[attribute]["Items"][characteristic]["count"] = occuranceOfCharacteristic
-
-        rarity = occuranceOfCharacteristic/numListings #number of items with this attribute divided by total number of items
-        nftDictionary[attribute]["Items"][characteristic]["rarity"] = rarity
-
-        deviationFromAverage = averageOccurance / occuranceOfCharacteristic
-        nftDictionary[attribute]["Items"][characteristic]["deviationFromAverage"] = deviationFromAverage
-
-
-        if(highestSpread > 1.05):
-            deviationRarity = 1
-        else:
-            deviationRarity = rarity / deviationFromAverage
-
-        nftDictionary[attribute]["Items"][characteristic]["deviationRarity"] = deviationRarity
-
-            
-        print(str(characteristic) + ": " + str(occuranceOfCharacteristic) + " | Rarity: " + str(rarity) + " | Deviation: " + str(deviationFromAverage) + " | DeviationRarity: " + str(deviationRarity))
-
-        
-
+    # location given here
     
-#print(nftDictionary)
+    # defining a params dict for the parameters to be sent to the API
+    PARAMS = {}
+    
+    # sending get request and saving the response as response object
+    r = requests.get(url = URL, params = PARAMS)
+    
+    # extracting data in json format
+    data = r.json()
 
-unsortedNFTList = []
+    numListingsInThisQuery = 0
 
-if(True):
     for listing in data["results"]:
-        title = listing["title"]
-        price = listing["price"]
-        mintAddress = listing["mintAddress"]
-        attributes = listing["attributes"]
-        masterRarity = 1
-        lowestPrice = price
 
-        #print("Title: " + str(title))
-        #print("Price: " + str(price))
-        #print("Mint Address: " + str(mintAddress))
-        
+        numListings += 1
+        numListingsInThisQuery += 1
+
+        attributes = listing["attributes"]
+        price = listing["price"]
+
+        print("cataloged " + listing["title"])
+
+        if(price < floorPrice and price > 0):
+            floorPrice = price
+
         for attribute in attributes:
+
             try:
                 trait = "trait_type"
-                nftDictionary[attribute[trait]]
+                attribute[trait]
             except Exception as e:
                 trait = "trait type"
 
-            statisticalRarity = nftDictionary[attribute[trait]]["Items"][attribute["value"]]["rarity"]
-            masterRarity *= statisticalRarity
-            #print("Attribute: " + attribute["trait_type"] +  " | Value: " + attribute["value"] + " | Deviation Rarity: " + str(devRarity))
-            #print(str(nftDictionary[attribute["trait_type"]]))
-        #print("Combined Rarity: " + str(masterRarity * 10000000))
 
-        unsortedNFTList.append({"name": title, "combRarity": masterRarity * 10000000, "price": price, "mintAddress": mintAddress})
-    print()
+            if (attribute[trait] not  in traitsShape):
+                traitsShape.append(attribute[trait])
+                listingTemplate[attribute[trait]] = {"null": 1}
+
+            traitCount = 0
+
+            if(attribute[trait] not in nftDictionary):
+                nftDictionary[attribute[trait]] = {"Items": {}, "Total": 0}
+                traitCount += 1
+                
+            if(attribute[trait] in nftDictionary and attribute["value"] not in nftDictionary[attribute[trait]]["Items"]):
+                nftDictionary[attribute[trait]]["Items"][attribute["value"]] = 1
+            else:
+                nftDictionary[attribute[trait]]["Items"][attribute["value"]] += 1
+
+            nftDictionary[attribute[trait]]["Total"] += traitCount
 
 
-sortedNFTList = sorted(unsortedNFTList, key=lambda d: d['combRarity'], reverse=True) 
+    for listing in data["results"]:
+        price = listing["price"]
+        priceFromFloor = price / floorPrice
+        title = listing["title"]
+        link = "https://magiceden.io/item-details/" + listing["mintAddress"]
+        attributes = listing["attributes"]
+        statRarity = 1
+        listingShape = listingTemplate.copy()
 
+
+
+        for attribute in attributes:
+            if(attribute["trait_type"] in listingShape):
+                #print(nftDictionary[attribute["trait_type"]])
+                try:
+                    rarity = nftDictionary[attribute["trait_type"]]["Items"][attribute["value"]] / numListings
+                except KeyError as e:
+                    rarity = 1
+                    print(attribute["value"])
+                    print(Fore.RED + "KeyError, setting Statistical Rarity to 1" + Style.RESET_ALL)
+                listingShape[attribute["trait_type"]] = {attribute["value"]: rarity}
+                statRarity *= rarity
+
+
+        #for trait in traitsShape:
+            #print("Trait Type: " + trait + " | Value: ")
+
+
+
+
+
+        sortedNFTList.append({"title": title, "price": price, "link": link, "statRarity": statRarity, "priceFromFloor": priceFromFloor, "listingShape": listingShape})
+
+        #print("---------------------------")
+    
+    if (numListingsInThisQuery < 500):
+        queryFinished = True
+    else:
+        numListingsInThisQuery = 0
+        skip += 500
+
+sortedNFTList = sorted(sortedNFTList, key=lambda d: d['statRarity'], reverse=True) 
 
 ranking = numListings
 
-priceRankingList = []
-
-rankingList = []
-
-i = 0
-
 for listing in sortedNFTList:
+    
+    priceFromFloor = (listing["priceFromFloor"] - 1) * 100
 
-    price = listing["price"]
-    priceDeviation = price / priceSum
+    listingShape = listing["listingShape"]
 
-    print("Title: " + listing["name"])
-    print("Combined Rarity: " + str(listing["combRarity"]))
-    print("Price: " + str(price))
-    print("Price Deviation: " + str(priceDeviation))
+    rarestPercentage = 1
+    rarestAttribute = {}
+
+    
+    if(priceFromFloor < 5):
+        color = Fore.CYAN
+    elif (priceFromFloor < 10):
+        color = Fore.BLUE
+    elif (priceFromFloor < 20):
+        color = Fore.MAGENTA
+    elif (priceFromFloor < 40):
+        color = Fore.YELLOW
+    else:
+        color = Fore.RED
+
+    print("Title: " + Fore.WHITE + listing["title"] + Style.RESET_ALL)
+    print("Price: " + color + str(listing["price"]) + " SOL" + Style.RESET_ALL)
+    #print("Price from Floor: " + Fore.WHITE + str(priceFromFloor) + Style.RESET_ALL)
+    print("Statistical Rarity: " + Fore.WHITE + str(listing["statRarity"]) + Style.RESET_ALL)
+    print("Ranking: " + Fore.WHITE + str(ranking) + "/" + str(numListings) + Style.RESET_ALL)
 
 
-    if(priceDeviation < 1):
-        priceRankingList.append(listing["price"])
-        rankingList.append(i)
-        i += 1
 
-    print("Ranking: " + str(ranking) + "/" + str(numListings))
+    #print("--------Attributes--------")
 
-    ranking -= 1
+    for attribute in listingShape.keys():
 
-    print("Link: https://magiceden.io/item-details/" + listing["mintAddress"])
+        attributePercentage = list(listingShape[attribute].values())[0]
+
+        #print(attribute + ": " + Fore.WHITE + list(listingShape[attribute].keys())[0] + " - " + str(attributePercentage * 100) + "%" + Style.RESET_ALL)
+
+        if(attributePercentage < rarestPercentage):
+            rarestPercentage = attributePercentage
+            rarestAttribute = listingShape[attribute]
+            rarestAttribute["Attribute"] = attribute 
+
+    #print()
+    print("Rarest Attribute: " + Fore.WHITE + str(list(rarestAttribute.values())[1]) + " - Value: " + str(list(rarestAttribute.keys())[0]) + " | Rarity: " + Fore.YELLOW + str(list(rarestAttribute.values())[0] * 100) + "%" + Style.RESET_ALL)
+    #print("--------------------------")
+    print("Link: " + Fore.WHITE + listing["link"] + Style.RESET_ALL)
+    print()
     print()
 
-
-x = np.array(rankingList)
-y = np.array(priceRankingList)
-m, b = np.polyfit(x, y, 1)
-
-plt.plot(x, y, 'o')
-plt.plot(x, m*x + b)
-
-
-plt.show()
+    ranking -= 1
