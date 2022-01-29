@@ -154,13 +154,13 @@ for listing in sortedNFTList:
 
 
 
-    #print("--------Attributes--------")
+    print("--------Attributes--------")
 
     for attribute in listingShape.keys():
 
         attributePercentage = list(listingShape[attribute].values())[0]
 
-        #print(attribute + ": " + Fore.WHITE + list(listingShape[attribute].keys())[0] + " - " + str(attributePercentage * 100) + "%" + Style.RESET_ALL)
+        print(attribute + ": " + Fore.WHITE + list(listingShape[attribute].keys())[0] + " - " + str(attributePercentage * 100) + "%" + Style.RESET_ALL)
 
         if(attributePercentage < rarestPercentage):
             rarestPercentage = attributePercentage
